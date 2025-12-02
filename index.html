@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bitmap Font (XML / FNT) → JSON Converter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+      rel="stylesheet" />
+
+    <style>
+      body {
+        font-family: "Montserrat", sans-serif;
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 0 16px;
+        line-height: 1.5;
+        background: #fff8f0;
+      }
+
+      h1 {
+        margin-bottom: 0.25rem;
+      }
+
+      .card {
+        border: 1px solid #e0dad2;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 16px 0;
+        background: #ffffff;
+      }
+
+      .card input {
+        display: flex;
+        font-family: "Montserrat", sans-serif;
+        width: 100%;
+      }
+
+      .card input[type="file" i] {
+        font-family: "Montserrat", sans-serif;
+      }
+
+      label {
+        font-weight: 600;
+      }
+
+      input[type="file"] {
+        margin-top: 8px;
+      }
+
+      button {
+        margin-top: 12px;
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        font-size: 14px;
+        background: #ffe4c2;
+        font-family: "Montserrat", sans-serif;
+        text-align: center;
+      }
+
+      button:hover:enabled {
+        background: #ffd39d;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      textarea {
+        width: 100%;
+        height: 200px;
+        font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+          "Courier New", monospace;
+        font-size: 12px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+        resize: vertical;
+        background: #fffdf8;
+      }
+
+      .row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .row > .card {
+        flex: 1 1 300px;
+      }
+
+      .status {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #555;
+        white-space: pre-wrap;
+      }
+      @media (max-width: 600px) {
+        body {
+          padding-bottom: 50%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Bitmap Font (XML / FNT) → JSON Converter</h1>
+    <p>
+      Upload your Bitmap Font <code>.xml</code> or text <code>.fnt</code> file
+      and get JSON in your custom format.
+    </p>
+
+    <div class="row">
+      <div class="card">
+        <label for="xmlFile">1. Upload font file (.xml / .fnt)</label><br />
+        <input id="xmlFile" type="file" accept=".xml,.fnt,.txt" />
+        <button id="convertButton" disabled>
+          Convert uploaded file → Download JSON
+        </button>
+      </div>
+
+      <div class="card">
+        <label for="xmlText">…or paste XML / FNT text here</label>
+        <textarea
+          id="xmlText"
+          placeholder="Paste &lt;font&gt;...</font> XML or text .fnt here"></textarea>
+        <button id="convertFromText">
+          Convert pasted text → Download JSON
+        </button>
+      </div>
+    </div>
+
+    <!-- JSON preview + single status -->
+    <div class="card">
+      <label for="jsonPreview">JSON preview</label>
+      <textarea
+        id="jsonPreview"
+        placeholder="Converted JSON will appear here"
+        readonly></textarea>
+      <div class="status" id="globalStatus"></div>
+    </div>
+
+    <!-- fast-xml-parser via ESM CDN -->
+    <script type="module">
+      import { XMLParser } from "https://cdn.jsdelivr.net/npm/fast-xml-parser@4.5.0/+esm";
+
+      const fileInput = document.getElementById("xmlFile");
+      const convertButton = document.getElementById("convertButton");
+      const convertFromTextButton = document.getElementById("convertFromText");
+      const xmlTextArea = document.getElementById("xmlText");
+      const jsonPreview = document.getElementById("jsonPreview");
+      const globalStatus = document.getElementById("globalStatus");
+
+      let lastFileName = "font";
+
+      const parser = new XMLParser({
+        ignoreAttributes: false,
+        attributeNamePrefix: "", // same as in the Node script
+      });
+
+      const toNum = (v) => (v === "" || v === undefined ? v : Number(v));
+
+      // 1. Unified parser: XML or text .fnt
+      function parseFontString(str) {
+        const trimmed = String(str).trim();
+
+        // XML bitmap font
+        if (trimmed.startsWith("<")) {
+          const root = parser.parse(trimmed);
+          if (!root || !root.font) {
+            throw new Error("No <font> root tag found in XML.");
+          }
+          return root.font;
+        }
+
+        // Text bitmap font (.fnt)
+        return parseTextFnt(trimmed);
+      }
+
+      // Parse text-based .fnt format (AngelCode-style)
+      function parseTextFnt(text) {
+        const lines = text
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l && !l.startsWith("#"));
+
+        const font = {};
+        const pages = [];
+        const chars = [];
+        const kernings = [];
+
+        let charsCount = null;
+        let kerningsCount = null;
+
+        const kvRegex = /(\w+)=("[^"]*"|\S+)/g;
+
+        for (const line of lines) {
+          const [tag] = line.split(/\s+/, 1);
+          const data = {};
+
+          let match;
+          while ((match = kvRegex.exec(line)) !== null) {
+            let key = match[1];
+            let val = match[2];
+            if (val.startsWith('"') && val.endsWith('"')) {
+              val = val.slice(1, -1);
+            }
+            data[key] = val;
+          }
+
+          switch (tag) {
+            case "info":
+              font.info = data;
+              break;
+            case "common":
+              font.common = data;
+              break;
+            case "page":
+              pages.push(data);
+              break;
+            case "chars":
+              charsCount = data.count;
+              break;
+            case "char":
+              chars.push(data);
+              break;
+            case "kernings":
+              kerningsCount = data.count;
+              break;
+            case "kerning":
+              kernings.push(data);
+              break;
+            default:
+              break;
+          }
+        }
+
+        font.pages = { page: pages };
+        font.chars = {
+          count: charsCount ?? String(chars.length),
+          char: chars,
+        };
+
+        if (kernings.length) {
+          font.kernings = {
+            count: kerningsCount ?? String(kernings.length),
+            kerning: kernings,
+          };
+        }
+
+        return font;
+      }
+
+      // 2. Convert font data into JSON format
+      function convertFont(input) {
+        const font = parseFontString(input);
+
+        const info = font.info || {};
+        const common = font.common || {};
+
+        const rawPages = font.pages?.page || [];
+        const pages = Array.isArray(rawPages) ? rawPages : [rawPages];
+
+        const rawChars = font.chars?.char || [];
+        const chars = Array.isArray(rawChars) ? rawChars : [rawChars];
+
+        const rawKernings = font.kernings?.kerning || [];
+        const kernings = rawKernings
+          ? Array.isArray(rawKernings)
+            ? rawKernings
+            : [rawKernings]
+          : [];
+
+        const result = {
+          info: [
+            {
+              face: info.face,
+              size: toNum(info.size),
+            },
+          ],
+          common: [
+            {
+              lineHeight: toNum(common.lineHeight),
+              base: toNum(common.base),
+              scaleW: toNum(common.scaleW),
+              scaleH: toNum(common.scaleH),
+              pages: toNum(common.pages),
+            },
+          ],
+          pages: pages.map((p) => ({
+            page: {
+              id: toNum(p.id),
+              file: p.file,
+            },
+          })),
+          chars: {
+            count: String(font.chars?.count ?? chars.length),
+            char: chars.map((c) => ({
+              id: toNum(c.id),
+              x: toNum(c.x),
+              y: toNum(c.y),
+              width: toNum(c.width),
+              height: toNum(c.height),
+              xoffset: toNum(c.xoffset),
+              yoffset: toNum(c.yoffset),
+              xadvance: toNum(c.xadvance),
+              page: toNum(c.page),
+              chnl: toNum(c.chnl),
+            })),
+          },
+          kernings: kernings.length
+            ? {
+                count: String(font.kernings?.count ?? kernings.length),
+                kerning: kernings.map((k) => ({
+                  first: toNum(k.first),
+                  second: toNum(k.second),
+                  amount: toNum(k.amount),
+                })),
+              }
+            : undefined,
+        };
+
+        return result;
+      }
+
+      // 3. Show JSON on the page
+      function showJsonPreview(json) {
+        jsonPreview.value = JSON.stringify(json, null, 2);
+        jsonPreview.scrollTop = 0;
+      }
+
+      // 4. Trigger JSON file download
+      function triggerDownload(json, baseName = "font") {
+        const blob = new Blob([JSON.stringify(json, null, 2)], {
+          type: "application/json",
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = baseName.replace(/\.[^/.]+$/, "") + ".json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      // 5. UI event handlers
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files?.[0];
+        if (!file) {
+          convertButton.disabled = true;
+          globalStatus.textContent = "No file selected.";
+          return;
+        }
+        lastFileName = file.name || "font";
+        convertButton.disabled = false;
+        globalStatus.textContent = `Selected: ${file.name} (${Math.round(
+          file.size / 1024
+        )} KB)`;
+      });
+
+      // Convert uploaded file
+      convertButton.addEventListener("click", () => {
+        const file = fileInput.files?.[0];
+        if (!file) {
+          globalStatus.textContent = "Please select a file first.";
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const content = String(reader.result);
+            const json = convertFont(content);
+            showJsonPreview(json);
+            triggerDownload(json, lastFileName);
+            globalStatus.textContent =
+              "Conversion successful. JSON file downloaded.";
+          } catch (err) {
+            console.error(err);
+            globalStatus.textContent = "Error: " + err.message;
+          }
+        };
+        reader.onerror = () => {
+          globalStatus.textContent = "Failed to read file.";
+        };
+        reader.readAsText(file);
+      });
+
+      // Convert from pasted text
+      convertFromTextButton.addEventListener("click", () => {
+        const content = xmlTextArea.value.trim();
+        if (!content) {
+          globalStatus.textContent =
+            "Paste XML or FNT text into the text area first.";
+          return;
+        }
+
+        try {
+          const json = convertFont(content);
+          showJsonPreview(json);
+          triggerDownload(json, "font");
+          globalStatus.textContent =
+            "Conversion successful. JSON file downloaded.";
+        } catch (err) {
+          console.error(err);
+          globalStatus.textContent = "Error: " + err.message;
+        }
+      });
+    </script>
+  </body>
+</html>
