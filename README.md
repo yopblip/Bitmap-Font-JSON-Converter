@@ -6,6 +6,14 @@ This tool supports both **XML-based** and **ASCII text-based** bitmap fonts and 
 
 ---
 
+## 🚀 Live Demo
+
+Try it online:
+
+👉 **https://yopblip.github.io/Bitmap-Font-JSON-Converter/**
+
+---
+
 ## ✨ Features
 
 - Convert **XML** Bitmap Font files
@@ -23,8 +31,8 @@ This tool supports both **XML-based** and **ASCII text-based** bitmap fonts and 
 
 This tool cannot parse **binary `.fnt` files**, because they use a block-based binary structure instead of text. Only the following formats are supported:
 
-- ✔ XML bitmap fonts
-- ✔ ASCII / text bitmap fonts
+- ✔ XML bitmap fonts  
+- ✔ ASCII / text bitmap fonts  
 - ✘ Binary `.fnt` (BMF)
 
 Attempting to load a binary `.fnt` file will fail.
@@ -35,19 +43,21 @@ Attempting to load a binary `.fnt` file will fail.
 
 ### 1. Upload a file
 
-1. Choose a `.xml` or `.fnt` file.
-2. Click **Convert → Download JSON**.
+1. Choose a `.xml`, `.fnt`, or `.txt` file.
+2. Click **“Convert uploaded file → Download JSON”**.
+3. The JSON will appear in the preview box and download automatically.
 
 ### 2. Or paste the content manually
 
 1. Paste the XML or ASCII `.fnt` text into the textarea.
-2. Click **Convert → Download JSON**.
+2. Click **“Convert pasted text → Download JSON”**.
+3. The JSON will appear in the preview box and download automatically.
 
 ---
 
 ## 🧩 JSON Output Structure
 
-The converter normalizes all formats into a unified JSON structure:
+The converter normalizes all supported formats into a unified JSON structure:
 
 ```json
 {
@@ -102,11 +112,16 @@ The converter normalizes all formats into a unified JSON structure:
     ]
   }
 }
-```
+````
+
+### 🔸 Numeric Fields
+
+* Metric-like fields (`x`, `y`, `width`, `height`, `xoffset`, `yoffset`, `xadvance`, `lineHeight`, etc.) are converted to **numbers**.
+* `chars.count` and `kernings.count` are kept as **strings**, matching typical bitmap font metadata.
 
 ### 🔸 Optional Fields
 
-- **`kernings`** is **optional**.
+* **`kernings`** is **optional**.
   It will appear in the JSON output **only if the source file contains kerning pairs**.
   If no kerning information is present, the `kernings` field is omitted entirely.
 
@@ -125,34 +140,42 @@ Example without `kernings`:
 
 ## 🛠 How It Works
 
-1. The tool automatically detects input type:
+1. The tool automatically detects the input type:
 
-   - XML `<font>...</font>`
-   - ASCII `.fnt` text
+   * XML `<font>...</font>`
+   * ASCII `.fnt` text
 
-2. Text `.fnt` parsing supports:
+2. Text `.fnt` parsing supports the classic AngelCode-style blocks:
 
-   - `info`
-   - `common`
-   - `page`
-   - `chars` / `char`
-   - `kernings` / `kerning`
+   * `info`
+   * `common`
+   * `page`
+   * `chars` / `char`
+   * `kernings` / `kerning`
 
-3. XML parsing is done via **fast-xml-parser**.
-4. All numeric values are automatically converted to numbers in JSON.
+3. XML parsing is done via [`fast-xml-parser`](https://github.com/NaturalIntelligence/fast-xml-parser) (ESM CDN).
+
+4. The parsed data is normalized into a single `font` object and then mapped into the final JSON format used by this tool.
 
 ---
 
 ## 🔧 Development
 
-- Single static HTML file
-- Uses **vanilla JavaScript** and **fast-xml-parser (ESM CDN)**
-- No build step required, just open the HTML in a browser
+* Single static **HTML** file (`index.html`)
+* Plain **vanilla JavaScript**
+* **fast-xml-parser** loaded via ES module CDN
+* No build step required — just push to GitHub Pages or open `index.html` in a browser
+
+Repository structure:
+
+```text
+/
+  index.html
+  README.md
+```
 
 ---
 
 ## 📄 License
 
 MIT — free to use in any project.
-
-
