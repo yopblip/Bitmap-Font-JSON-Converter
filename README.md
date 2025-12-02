@@ -157,6 +157,3 @@ MIT — free to use in any project.
 
 ```
 
----
-
-```
