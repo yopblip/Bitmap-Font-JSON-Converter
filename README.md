@@ -155,5 +155,4 @@ Example without `kernings`:
 
 MIT — free to use in any project.
 
-```
 
